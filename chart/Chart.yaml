@@ -1,0 +1,17 @@
+apiVersion: v2
+name: claude-code
+description: claude-code LanguageAgentRuntime for the Language Operator — an interactive Claude Code terminal agent
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - ai
+  - llm
+  - agents
+  - claude-code
+home: https://github.com/language-operator/claude-code-adapter
+sources:
+  - https://github.com/language-operator/claude-code-adapter
+maintainers:
+  - name: James Ryan
+    email: james@theryans.io

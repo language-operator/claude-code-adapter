@@ -1,0 +1,17 @@
+claude-code LanguageAgentRuntime installed.
+
+Prerequisite: the `language-operator` chart must be installed first (it provides
+the LanguageAgentRuntime CRD). Installing against a cluster without the CRD fails.
+
+The runtime is cluster-scoped and can be referenced by LanguageAgents in any
+namespace via spec.runtime:
+
+  apiVersion: langop.io/v1alpha1
+  kind: LanguageAgent
+  metadata:
+    name: my-agent
+  spec:
+    runtime: claude-code
+
+Image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+Claude Code auth is interactive — open the agent terminal and run /login.

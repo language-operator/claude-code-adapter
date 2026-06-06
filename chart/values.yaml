@@ -1,0 +1,34 @@
+# claude-code LanguageAgentRuntime — a cluster-scoped runtime preset.
+# Requires the language-operator chart (which provides the LanguageAgentRuntime
+# CRD) to be installed first.
+
+# Combined adapter image, used by both the init container (seed-config.mjs) and
+# the main container (server.mjs — the xterm.js / tmux WebSocket terminal).
+image:
+  repository: ghcr.io/language-operator/claude-code-adapter
+  tag: latest
+  # pullPolicy for both the init and main containers. Leave empty to inherit the
+  # cluster default; set to Never in local development to use a locally imported
+  # image.
+  pullPolicy: ""
+
+# Agents using this runtime sit behind the cluster OIDC proxy (when the cluster
+# enables auth). Claude Code authentication itself is interactive (run /login in
+# the terminal); no credentials are injected here.
+auth:
+  enabled: true
+
+# Port the terminal server listens on.
+port: 8080
+
+workspace:
+  size: 10Gi
+  mountPath: /workspace
+
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 250m
+  limits:
+    memory: 2Gi
+    cpu: 1000m
