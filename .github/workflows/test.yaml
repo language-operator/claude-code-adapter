@@ -31,7 +31,9 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Run smoke tests
-        run: docker run --rm --entrypoint sh claude-code-adapter:test /app/test.sh
+        # The image runs as the unprivileged `node` user; the smoke test writes
+        # to /etc/agent (which the operator mounts at runtime), so run it as root.
+        run: docker run --rm --user root --entrypoint sh claude-code-adapter:test /app/test.sh
 
   chart-lint:
     runs-on: ubuntu-latest

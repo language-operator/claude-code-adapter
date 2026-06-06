@@ -13,4 +13,4 @@ publish: build
 	docker push $(IMAGE):latest
 
 test: build
-	docker run --rm --entrypoint sh $(IMAGE):$(TAG) /app/test.sh
+	docker run --rm --user root --entrypoint sh $(IMAGE):$(TAG) /app/test.sh
