@@ -55,6 +55,7 @@ models:
     model: claude-sonnet-4-5
 EOF
 
+mkdir -p /tmp/t1/home
 HOME=/tmp/t1/home AGENT_NAME=test-agent \
   node /app/seed-config.mjs > /tmp/t1/out.txt 2>&1
 clear_config
