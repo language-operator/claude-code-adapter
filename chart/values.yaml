@@ -21,10 +21,6 @@ auth:
 # Port the terminal server listens on.
 port: 8080
 
-workspace:
-  size: 10Gi
-  mountPath: /workspace
-
 resources:
   requests:
     memory: 512Mi

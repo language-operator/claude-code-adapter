@@ -20,10 +20,6 @@ spec:
       protocol: TCP
       expose: true
 
-  workspace:
-    size: {{ .Values.workspace.size }}
-    mountPath: {{ .Values.workspace.mountPath }}
-
   deployment:
     {{- if .Values.image.pullPolicy }}
     imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -38,9 +34,11 @@ spec:
         # so this init container runs seed-config.mjs once and exits.
         # MODEL_ENDPOINT, LLM_MODEL, and AGENT_NAME are injected by the operator.
         command: ["node", "/app/seed-config.mjs"]
+        # The operator provisions and mounts the workspace volume at /workspace
+        # by default; the init container mounts it to seed config onto the PVC.
         volumeMounts:
           - name: workspace
-            mountPath: {{ .Values.workspace.mountPath }}
+            mountPath: /workspace
 
     startupProbe:
       tcpSocket:
