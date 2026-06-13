@@ -2,8 +2,8 @@ apiVersion: v2
 name: claude-code
 description: claude-code LanguageAgentRuntime for the Language Operator — an interactive Claude Code terminal agent
 type: application
-version: 0.1.1
-appVersion: "0.1.1"
+version: 0.1.2
+appVersion: "0.1.2"
 keywords:
   - ai
   - llm

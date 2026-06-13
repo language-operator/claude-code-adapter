@@ -6,7 +6,7 @@
 # the main container (server.mjs — the xterm.js / tmux WebSocket terminal).
 image:
   repository: ghcr.io/language-operator/claude-code-adapter
-  tag: 0.1.1
+  tag: 0.1.2
   # pullPolicy for both the init and main containers. Leave empty to inherit the
   # cluster default; set to Never in local development to use a locally imported
   # image.
