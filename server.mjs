@@ -13,7 +13,7 @@ const fitDir = path.dirname(require.resolve('@xterm/addon-fit/package.json'));
 const clipboardDir = path.dirname(require.resolve('@xterm/addon-clipboard/package.json'));
 
 const PORT = Number(process.env.PORT) || 8080;
-const WORKDIR = process.env.CLAUDE_CWD || '/workspace';
+const WORKDIR = process.env.AGENT_REPO_DIR || process.env.CLAUDE_CWD || '/workspace';
 const AGENT_NAME = process.env.AGENT_NAME || 'agent';
 
 const INDEX_PATH = path.join(appDir, 'index.html');
