@@ -3,7 +3,7 @@ IMAGE     := $(REGISTRY)/claude-code-adapter
 GIT_SHA   := $(shell git rev-parse --short HEAD)
 TAG       ?= $(GIT_SHA)
 
-.PHONY: build publish test
+.PHONY: build publish test lint-chart
 
 build:
 	docker build -t $(IMAGE):$(TAG) -t $(IMAGE):latest .
@@ -14,3 +14,6 @@ publish: build
 
 test: build
 	docker run --rm --user root --entrypoint sh $(IMAGE):$(TAG) /app/test.sh
+
+lint-chart:
+	helm lint chart/
