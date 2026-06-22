@@ -6,9 +6,9 @@
 set -eu
 
 if [ -n "${AGENT_PERSONA:-}" ]; then
-    set -- --append-system-prompt "$AGENT_PERSONA"
+    set -- --continue --append-system-prompt "$AGENT_PERSONA"
 else
-    set --
+    set -- --continue
 fi
 
 if [ -n "${AGENT_INSTRUCTIONS:-}" ]; then
