@@ -1,5 +1,6 @@
 ARG GH_VERSION=2.65.0
 ARG GO_VERSION=1.26.4
+ARG HELM_VERSION=3.17.3
 
 # -----------------------------------------------------------------------------
 # Builder stage: compile native deps (node-pty has no Linux prebuilds), then
@@ -28,6 +29,7 @@ RUN npm ci --omit=dev --no-audit --no-fund
 FROM node:24-slim
 ARG GH_VERSION
 ARG GO_VERSION
+ARG HELM_VERSION
 
 # UTF-8 everywhere. node:24-slim ships `C.UTF-8` already; we just need to
 # select it. Without this, the default locale is POSIX and TUIs like claude
@@ -79,6 +81,18 @@ RUN ARCH=$(dpkg --print-architecture) && \
     tar -xzf /tmp/go.tar.gz -C /usr/local && \
     rm /tmp/go.tar.gz
 ENV PATH=/usr/local/go/bin:$PATH
+
+# -----------------------------------------------------------------------------
+# Helm CLI
+# Installed from the official tarball. Used for `helm lint` in CI and by
+# agent sessions that need to validate charts without a live cluster.
+# -----------------------------------------------------------------------------
+RUN ARCH=$(dpkg --print-architecture) && \
+    wget -qO /tmp/helm.tar.gz \
+        "https://get.helm.sh/helm-v${HELM_VERSION}-linux-${ARCH}.tar.gz" && \
+    tar -xzf /tmp/helm.tar.gz -C /tmp && \
+    mv "/tmp/linux-${ARCH}/helm" /usr/local/bin/helm && \
+    rm -rf /tmp/helm.tar.gz "/tmp/linux-${ARCH}"
 
 # -----------------------------------------------------------------------------
 # Claude Code CLI
