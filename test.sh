@@ -129,6 +129,8 @@ assert "node present"                   "node --version"
 assert "node-pty + ws resolvable"       "cd /app && node -e \"require('node-pty');require('ws')\""
 assert "@xterm assets resolvable"       "cd /app && node -e \"require.resolve('@xterm/xterm/lib/xterm.js');require.resolve('@xterm/xterm/css/xterm.css');require.resolve('@xterm/addon-fit/lib/addon-fit.js')\""
 assert "claude CLI present"             "claude --version"
+assert "gh CLI present"                 "gh --version"
+assert "glab CLI present"               "glab --version"
 assert "tmux present"                   "tmux -V"
 
 # ---------------------------------------------------------------------------

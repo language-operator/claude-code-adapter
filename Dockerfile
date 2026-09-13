@@ -1,4 +1,5 @@
 ARG GH_VERSION=2.65.0
+ARG GLAB_VERSION=1.117.0
 ARG GO_VERSION=1.26.4
 
 # -----------------------------------------------------------------------------
@@ -27,6 +28,7 @@ RUN npm ci --omit=dev --no-audit --no-fund
 # -----------------------------------------------------------------------------
 FROM node:24-slim
 ARG GH_VERSION
+ARG GLAB_VERSION
 ARG GO_VERSION
 
 # UTF-8 everywhere. node:24-slim ships `C.UTF-8` already; we just need to
@@ -68,6 +70,19 @@ RUN ARCH=$(dpkg --print-architecture) && \
     tar -xzf /tmp/gh.tar.gz -C /tmp && \
     mv "/tmp/gh_${GH_VERSION}_linux_${ARCH}/bin/gh" /usr/local/bin/gh && \
     rm -rf /tmp/gh.tar.gz "/tmp/gh_${GH_VERSION}_linux_${ARCH}"
+
+# -----------------------------------------------------------------------------
+# glab: GitLab CLI
+# Same approach as gh: the official release tarball, named with the dpkg arch.
+# The operator exports GITLAB_TOKEN (and GITLAB_HOST for self-hosted instances)
+# to agents on GitLab repositories, so glab is authenticated out of the box.
+# -----------------------------------------------------------------------------
+RUN ARCH=$(dpkg --print-architecture) && \
+    wget -qO /tmp/glab.tar.gz \
+        "https://gitlab.com/gitlab-org/cli/-/releases/v${GLAB_VERSION}/downloads/glab_${GLAB_VERSION}_linux_${ARCH}.tar.gz" && \
+    tar -xzf /tmp/glab.tar.gz -C /tmp bin/glab && \
+    mv /tmp/bin/glab /usr/local/bin/glab && \
+    rm -rf /tmp/glab.tar.gz /tmp/bin
 
 # -----------------------------------------------------------------------------
 # Go toolchain

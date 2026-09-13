@@ -13,7 +13,7 @@ Helm chart that registers the `claude-code` `LanguageAgentRuntime`.
   used by both the init container (`seed-config.mjs`, which translates the
   operator's `/etc/agent/config.yaml` into Claude Code's native settings) and the
   main container (`server.mjs`, the xterm.js / tmux WebSocket terminal). Ships
-  the Claude Code CLI, the GitHub CLI, a Go toolchain, and common Unix tools.
+  the Claude Code CLI, the GitHub and GitLab CLIs, a Go toolchain, and common Unix tools.
 - **Chart** (`chart/`) — renders the cluster-scoped `claude-code`
   `LanguageAgentRuntime`. Published to `oci://ghcr.io/language-operator/charts/claude-code`.
 
