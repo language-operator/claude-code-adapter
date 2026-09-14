@@ -131,6 +131,8 @@ assert "@xterm assets resolvable"       "cd /app && node -e \"require.resolve('@
 assert "claude CLI present"             "claude --version"
 assert "tmux present"                   "tmux -V"
 assert "helm present"                   "helm version"
+assert "make present"                   "make --version"
+assert "shellcheck present"             "shellcheck --version"
 
 # ---------------------------------------------------------------------------
 echo ""

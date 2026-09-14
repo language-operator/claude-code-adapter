@@ -49,9 +49,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         htop \
         jq \
         less \
+        make \
         openssh-client \
         procps \
         ripgrep \
+        shellcheck \
         tmux \
         tree \
         unzip \
