@@ -133,6 +133,8 @@ assert "gh CLI present"                 "gh --version"
 assert "glab CLI present"               "glab --version"
 assert "tmux present"                   "tmux -V"
 assert "helm present"                   "helm version"
+assert "make present"                   "make --version"
+assert "shellcheck present"             "shellcheck --version"
 
 # ---------------------------------------------------------------------------
 echo ""
