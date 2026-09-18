@@ -137,6 +137,71 @@ assert "make present"                   "make --version"
 assert "shellcheck present"             "shellcheck --version"
 
 # ---------------------------------------------------------------------------
+# Test 6: WebSocket Origin check (cross-site WebSocket hijacking guard)
+# ---------------------------------------------------------------------------
+echo "--- Test 6: WebSocket Origin check ---"
+
+mkdir -p /tmp/t6
+
+# Handshake probe: prints "open" if the upgrade succeeded, "rejected:<code>"
+# if the server refused it. Requires ws by absolute path so it runs from /tmp.
+cat > /tmp/t6/probe.cjs << 'PROBE'
+const WebSocket = require('/app/node_modules/ws');
+const [url, origin] = process.argv.slice(2);
+const ws = new WebSocket(url, origin ? { headers: { Origin: origin } } : {});
+const done = (s) => { console.log(s); process.exit(0); };
+ws.on('open', () => { ws.close(); done('open'); });
+ws.on('unexpected-response', (req, res) => done('rejected:' + res.statusCode));
+ws.on('error', (err) => done('error:' + err.message));
+setTimeout(() => done('timeout'), 5000);
+PROBE
+
+start_server() {
+  # $1 = port, $2 = ALLOWED_ORIGINS (may be empty)
+  ALLOWED_ORIGINS="$2" PORT="$1" node /app/server.mjs > "/tmp/t6/server-$1.log" 2>&1 &
+  SERVER_PID=$!
+  i=0
+  while [ "$i" -lt 50 ]; do
+    wget -qO- "http://127.0.0.1:$1/" > /dev/null 2>&1 && return 0
+    i=$((i + 1))
+    sleep 0.1
+  done
+  echo "  (server on :$1 never came up)"
+  return 1
+}
+
+stop_server() {
+  kill "$SERVER_PID" 2>/dev/null || true
+  wait "$SERVER_PID" 2>/dev/null || true
+}
+
+probe() {
+  node /tmp/t6/probe.cjs "ws://127.0.0.1:$1/ws" "$2"
+}
+
+# --- default policy: Origin must match Host ---
+if start_server 8099 ""; then
+  assert "same-origin accepted"       "[ \"\$(probe 8099 http://127.0.0.1:8099)\" = open ]"
+  assert "cross-origin rejected"      "[ \"\$(probe 8099 https://evil.example)\" = rejected:403 ]"
+  assert "host mismatch rejected"     "[ \"\$(probe 8099 http://127.0.0.1:9999)\" = rejected:403 ]"
+  assert "unparseable origin rejected" "[ \"\$(probe 8099 'not a url')\" = rejected:403 ]"
+  assert "no Origin accepted (non-browser client)" "[ \"\$(probe 8099 '')\" = open ]"
+  assert "rejection logged"           "grep -q 'ws upgrade rejected' /tmp/t6/server-8099.log"
+  stop_server
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# --- explicit allowlist: ALLOWED_ORIGINS replaces the Host comparison ---
+if start_server 8098 "https://console.example.com"; then
+  assert "allowlisted origin accepted"     "[ \"\$(probe 8098 https://console.example.com)\" = open ]"
+  assert "non-allowlisted origin rejected" "[ \"\$(probe 8098 http://127.0.0.1:8098)\" = rejected:403 ]"
+  stop_server
+else
+  FAIL=$((FAIL + 1))
+fi
+
+# ---------------------------------------------------------------------------
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ] || exit 1
