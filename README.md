@@ -40,6 +40,36 @@ spec:
 
 Claude Code authentication is interactive: open the agent terminal and run `/login`.
 
+## Security
+
+The terminal has no authentication of its own — agents sit behind the cluster
+OIDC proxy (`auth.enabled` in the chart). Two things follow from that:
+
+- **Origin is enforced on the WebSocket upgrade.** WebSocket handshakes are not
+  subject to the same-origin policy, so a cookie-authenticating proxy on its own
+  does not stop a third-party page from opening `wss://<agent-host>/ws` and
+  driving the terminal as the signed-in user. `server.mjs` rejects any upgrade
+  whose `Origin` doesn't match the request's `Host` (403, logged as
+  `ws upgrade rejected: ...` — that line is what to look for if a terminal
+  suddenly connects to nothing after a proxy change). Set `ALLOWED_ORIGINS` to a
+  comma-separated list of exact origins when the proxy rewrites `Host`, or when
+  some other origin — a console embedding the terminal — has to connect.
+  Requests carrying no `Origin` at all (curl, probes, in-cluster clients) are
+  allowed: they aren't browsers, so they aren't the attack this stops.
+- **Pod reachability is still the real boundary.** Anything that can reach port
+  8080 on the pod directly bypasses the proxy entirely. Keep a NetworkPolicy in
+  front that admits only the proxy.
+- **Repository contents execute in the pod.** `seed-config.mjs` marks
+  `/workspace` as trusted so Claude Code doesn't prompt on first run, and
+  `launch-claude` runs `AGENT_INSTRUCTIONS` as the opening message. Together with
+  the operator cloning the agent's repository into `/workspace/<repo>`, that means
+  anything on the tracked branch — `.claude/settings.json` hooks, `CLAUDE.md`,
+  a `Makefile` target an instruction tells the agent to run — takes effect inside
+  the pod, unprompted, with the agent's git credentials and whatever else is
+  mounted. Treat push access to an agent's repository as equivalent to shell
+  access in that agent's pod: protect the branch, review what merges, and don't
+  point an agent at a repository you don't control.
+
 ## Development
 
 ```bash

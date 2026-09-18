@@ -130,6 +130,11 @@ if (Object.keys(mcpServers).length > 0) {
 // subdirectory the agent cd's into (e.g. /workspace/<repo> for the dev-team).
 // In the operator model, the workspace was provisioned for this agent by the
 // user who deployed the LanguageAgent — trust is implicit.
+//
+// Note what that trust covers: whatever is on the cloned repository's tracked
+// branch (hooks in .claude/settings.json, CLAUDE.md) runs in this pod without a
+// prompt. Push access to an agent's repository is therefore equivalent to shell
+// access in its pod — see "Security" in README.md.
 claudeJson.projects = claudeJson.projects ?? {}
 claudeJson.projects['/workspace'] = {
   ...(claudeJson.projects['/workspace'] ?? {}),
