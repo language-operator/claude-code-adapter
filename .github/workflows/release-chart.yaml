@@ -1,9 +1,15 @@
 name: Release Helm Chart
 
+# Tags only. This used to run on every push to main, which republished whatever
+# version string happened to be in Chart.yaml — so merging a PR that changed the
+# chart overwrote an already-published version in place, pairing a new template
+# with the old image that version names. A published chart version is immutable
+# in practice: people have it installed, and `charts/language-operator-runtimes`
+# pins this chart as a dependency (Helm's Chart.lock hashes the dependency list,
+# not the tarball, so a rewritten version produces no mismatch and no warning).
+# Publishing is a release action, not a merge action.
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -31,6 +37,26 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} \
             --username ${{ github.actor }} --password-stdin
+
+      # Belt and braces for the trigger above: workflow_dispatch still runs against
+      # any ref, so a hand-run on an unbumped chart would overwrite a published
+      # version exactly as a merge used to. Publishing a version that already
+      # exists is always a mistake, so refuse it here rather than trust the
+      # trigger to be right forever.
+      #
+      # This is a lint, not a barrier. It reads any `helm show` failure as "not
+      # published", so a registry hiccup, an auth failure or a rate limit all
+      # look like a clear runway and it proceeds. It catches a forgotten bump.
+      # The trigger above is the actual fix.
+      - name: Refuse to overwrite a published version
+        run: |
+          name="$(awk '/^name:/ {print $2; exit}' chart/Chart.yaml)"
+          version="$(awk '/^version:/ {print $2; exit}' chart/Chart.yaml)"
+          echo "chart: $name $version"
+          if helm show chart "${{ env.CHART_REPO }}/$name" --version "$version" >/dev/null 2>&1; then
+            echo "::error::$name $version is already published — bump the version in chart/Chart.yaml"
+            exit 1
+          fi
 
       - name: Package and push chart
         run: |
