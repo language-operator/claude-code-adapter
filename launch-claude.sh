@@ -4,6 +4,10 @@
 # → initial user message (the task to execute on startup). Either or both may be
 # absent — falls back to bare interactive claude.
 #
+# coding-runtime starts tmux already in the working directory (AGENT_REPO_DIR
+# when the agent sets spec.repository, /workspace otherwise), so `pwd` below is
+# already the directory whose conversation we want to resume.
+#
 # --continue resumes this directory's last conversation after a restart, but
 # only once one has been saved: on a first start, or after a run that never
 # got past onboarding (the login flow, say), `claude --continue` fails with
