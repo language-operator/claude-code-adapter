@@ -1,5 +1,9 @@
 name: Test
 
+env:
+  # Must match the base pinned in the Dockerfile.
+  CODING_RUNTIME_VERSION: v0.1.0
+
 on:
   push:
     branches:
@@ -30,10 +34,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Run smoke tests
-        # The image runs as the unprivileged `node` user; the smoke test writes
-        # to /etc/agent (which the operator mounts at runtime), so run it as root.
-        run: docker run --rm --user root --entrypoint sh claude-code-adapter:test /app/test.sh
+      # Fetches the shared suite at the pinned tag and runs the image under the
+      # posture the operator imposes and an adapter cannot override: read-only
+      # root, uid 1000, all capabilities dropped, tmpfs /tmp. Checks doctor, that
+      # seeding is idempotent and writes nothing outside /tmp and /workspace, the
+      # probe endpoints, manifest redaction, and the cross-origin WebSocket guard.
+      # See the script for the one check it tolerates, and why.
+      - name: Run conformance suite
+        run: ./hack/conformance.sh claude-code-adapter:test
 
   chart-lint:
     runs-on: ubuntu-latest

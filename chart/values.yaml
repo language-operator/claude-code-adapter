@@ -2,8 +2,10 @@
 # Requires the language-operator chart (which provides the LanguageAgentRuntime
 # CRD) to be installed first.
 
-# Combined adapter image, used by both the init container (seed-config.mjs) and
-# the main container (server.mjs — the xterm.js / tmux WebSocket terminal).
+# Runtime image built by this repo: the coding-runtime base plus the Claude Code
+# CLI, a manifest, an emitter and a launcher. One container — the base seeds
+# Claude Code's config from /etc/agent/config.yaml on start, then serves the
+# xterm.js / tmux WebSocket terminal that fronts the interactive CLI.
 image:
   repository: ghcr.io/language-operator/claude-code-adapter
   tag: 0.1.5
@@ -18,7 +20,8 @@ image:
 auth:
   enabled: true
 
-# Port the terminal server listens on.
+# HTTP port the WebSocket terminal server listens on. Injected as PORT, so it
+# moves the listener and the Service together.
 port: 8080
 
 resources:

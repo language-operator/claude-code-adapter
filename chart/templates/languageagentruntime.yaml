@@ -5,12 +5,14 @@ metadata:
   labels:
     {{- include "claude-code.labels" . | nindent 4 }}
 spec:
-  # Single combined image used by both the init container (seed-config.mjs)
-  # and the main container (server.mjs WebSocket terminal).
+  # Built on coding-runtime, which owns the OS layer, the web terminal and the
+  # /etc/agent/config.yaml ETL. This repo adds the Claude Code CLI plus a
+  # manifest (/etc/coding-runtime/runtime.json), an emitter and a launcher.
   image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
 
-  # Agents using this runtime sit behind the cluster OIDC proxy (when the cluster enables auth).
-  # Claude Code authentication itself is interactive (run /login in the terminal); no credentials here.
+  # Agents using this runtime sit behind the cluster OIDC proxy (when the cluster
+  # enables auth). Claude Code authentication itself is interactive (run /login in
+  # the terminal); no credentials are injected here.
   auth:
     enabled: {{ .Values.auth.enabled }}
 
@@ -24,24 +26,25 @@ spec:
     {{- if .Values.image.pullPolicy }}
     imagePullPolicy: {{ .Values.image.pullPolicy }}
     {{- end }}
-    initContainers:
-      - name: claude-code-adapter
-        image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
-        {{- if .Values.image.pullPolicy }}
-        imagePullPolicy: {{ .Values.image.pullPolicy }}
-        {{- end }}
-        # Override the image's default entrypoint (which runs the server)
-        # so this init container runs seed-config.mjs once and exits.
-        # MODEL_ENDPOINT, LLM_MODEL, and AGENT_NAME are injected by the operator.
-        command: ["node", "/app/seed-config.mjs"]
-        # The operator provisions and mounts the workspace volume at /workspace
-        # by default; the init container mounts it to seed config onto the PVC.
-        volumeMounts:
-          - name: workspace
-            mountPath: /workspace
+    # The container runs the base entrypoint: resolve the environment, seed
+    # config, then serve. Seeding runs here rather than in an init container
+    # because the operator mounts /tmp into the agent container only, so an init
+    # container shares no writable path with it — and the normalized config is a
+    # pure function of /etc/agent/config.yaml plus the environment, both of which
+    # are already present here. On WebSocket connect the base spawns
+    # `tmux new-session -A` running launch-claude, in AGENT_REPO_DIR when the
+    # agent sets spec.repository and /workspace otherwise.
+    #
+    # CLAUDE_CONFIG_DIR is set by runtime.json to ${WORKSPACE}/.claude — the same
+    # /workspace/.claude this chart used to set here, so existing agents keep
+    # their credentials, sessions and project history.
 
+    # Probe the harness, not just the listener: a TCP probe stays green against a
+    # socket with a dead harness behind it. Not /ping or /ready — oauth2-proxy
+    # v7.6.0 answers both itself, before the upstream ever sees them.
     startupProbe:
-      tcpSocket:
+      httpGet:
+        path: /healthz
         port: {{ .Values.port }}
       initialDelaySeconds: 5
       periodSeconds: 2
@@ -49,14 +52,16 @@ spec:
       failureThreshold: 30
 
     livenessProbe:
-      tcpSocket:
+      httpGet:
+        path: /healthz
         port: {{ .Values.port }}
       periodSeconds: 15
       timeoutSeconds: 3
       failureThreshold: 3
 
     readinessProbe:
-      tcpSocket:
+      httpGet:
+        path: /readyz
         port: {{ .Values.port }}
       periodSeconds: 10
       timeoutSeconds: 3
@@ -64,8 +69,10 @@ spec:
       failureThreshold: 3
 
     env:
-      - name: CLAUDE_CONFIG_DIR
-        value: /workspace/.claude   # Persist credentials, sessions, projects on the PVC
+      # The port the terminal server binds. Without this the server would fall
+      # back to its own default and .Values.port would only move the Service.
+      - name: PORT
+        value: {{ .Values.port | quote }}
 
     resources:
       {{- toYaml .Values.resources | nindent 6 }}

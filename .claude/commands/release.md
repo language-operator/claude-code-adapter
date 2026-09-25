@@ -40,7 +40,7 @@ Print: `Releasing vX.Y.Z (was <baseline>)`.
 
 **4. Edit version locations** (use the Edit tool):
 - `chart/Chart.yaml`: set `version: X.Y.Z` and `appVersion: "X.Y.Z"`.
-- `chart/values.yaml`: under `image:`, set `tag: X.Y.Z` (currently may be `latest`). This is the combined adapter image built by this repo, used by both the init and main containers.
+- `chart/values.yaml`: under `image:`, set `tag: X.Y.Z` (currently may be `latest`). This is the adapter image built by this repo — the coding-runtime base plus the Claude Code CLI, a manifest, an emitter and a launcher.
 
 **5. Validate the chart renders.** Run `helm lint chart` and `helm template chart >/dev/null`. If either fails, stop and report (the version is not yet committed, so nothing to roll back).
 
