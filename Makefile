@@ -1,9 +1,9 @@
-# The conformance suite lives in coding-runtime; hack/conformance.sh fetches it
-# at the tag the Dockerfile pins and runs the image the way the operator does —
-# read-only root, uid 1000, all capabilities dropped — so a failure here is a
-# failure in-cluster.
-CODING_RUNTIME_VERSION ?= v0.1.0
-
+# hack/conformance.sh extracts the suite from the image under test — it ships
+# inside the base image — so the checks always match the runtime being checked
+# and nothing here needs to know a coding-runtime version. It runs the image the
+# way the operator does (read-only root, uid 1000, all capabilities dropped), so
+# a failure here is a failure in-cluster. See the script for the one check it
+# tolerates, and why.
 REGISTRY  := ghcr.io/language-operator
 IMAGE     := $(REGISTRY)/claude-code-adapter
 GIT_SHA   := $(shell git rev-parse --short HEAD)
@@ -21,7 +21,7 @@ publish: build
 	docker push $(IMAGE):latest
 
 test: build
-	CODING_RUNTIME_VERSION=$(CODING_RUNTIME_VERSION) ./hack/conformance.sh $(IMAGE):$(TAG)
+	./hack/conformance.sh $(IMAGE):$(TAG)
 
 dev: build
 	docker save $(IMAGE):$(TAG) | sudo k3s ctr images import -
