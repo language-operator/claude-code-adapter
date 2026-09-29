@@ -1,47 +1,54 @@
 #!/usr/bin/env bash
 # Run the coding-runtime conformance suite against an adapter image.
 #
-# The suite lives upstream and is fetched at the tag the Dockerfile pins. The
-# whole test/ directory comes down, not just conformance.sh: the terminal
-# round-trip check bind-mounts a probe out of test/fixture-adapter/, and against
-# a missing path Docker helpfully creates an empty directory, so the check fails
-# for a reason that has nothing to do with the image.
+# The suite ships inside the base image, so it is extracted from the image under
+# test rather than fetched from a tag: the checks then always match the runtime
+# being checked, and the probe the terminal check needs is already beside it in
+# the image. Nothing here needs to know a coding-runtime version — the only pin
+# is ARG BASE in the Dockerfile.
 #
-# One check in adapter mode cannot pass for a TUI adapter. "a keystroke
-# round-trips through tmux" types `echo CONFORMANCE_TERMINAL""_OK` and waits for
-# a *shell* to reconstitute the marker — the quotes are deliberate, so that an
-# echo of the keystrokes alone cannot satisfy it. Our terminal runs the Claude
-# Code TUI, which puts typed text in its prompt rather than executing it, so the
-# marker never appears. The probe sits in test/fixture-adapter/ beside a bash
-# launcher, and the upstream authoring guide describes adapter mode as "uid,
-# read-only rootfs, probes, and the cross-origin guard" without mentioning it:
-# the check belongs to the fixture, not to every adapter built on the base.
+# One check cannot pass for this adapter. "a keystroke reaches the program under
+# tmux" types plain text into the terminal and greps `tmux capture-pane` for it.
+# That holds for a shell showing a command line, and for a TUI showing its prompt
+# box — but only once the TUI has reached that prompt box. The conformance
+# container has no credentials, so Claude Code sits on its first-run onboarding
+# screen, which is a menu rather than a text field and renders none of the typed
+# characters. The captured pane on failure is the theme picker:
+#
+#       2 -  console.log("Hello, World!");
+#       2 +  console.log("Hello, Claude!");
+#      ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+#       Syntax theme: Monokai Extended (ctrl+t to disable)
+#
+# The terminal path itself is proven by the check before it — "the terminal
+# socket carries traffic both ways" passes, and the tmux session exists — so what
+# fails is the assumption about what the program does with the keystrokes, not
+# their delivery.
 #
 # Tracked upstream: https://github.com/language-operator/coding-runtime/issues/4
 #
 # So it is tolerated — by name, and nothing else is. Any other failure fails the
 # run, as does this one disappearing: if the suite starts passing outright, the
-# tolerance below has outlived the upstream limitation and should be deleted.
+# tolerance has outlived the limitation and should be deleted.
 set -euo pipefail
 
 IMAGE="${1:?usage: hack/conformance.sh <image>}"
-VERSION="${CODING_RUNTIME_VERSION:-v0.1.0}"
-KNOWN="a keystroke round-trips through tmux"
+KNOWN="a keystroke reaches the program under tmux"
 
-SUITE="$(mktemp -d)"
-trap 'rm -rf "$SUITE"' EXIT
-curl -fsSL "https://github.com/language-operator/coding-runtime/archive/refs/tags/${VERSION}.tar.gz" \
-    | tar -xz --wildcards --strip-components=2 -C "$SUITE" '*/test'
-chmod +x "$SUITE/conformance.sh"
+SUITE="$(mktemp -t conformance.XXXXXX.sh)"
+trap 'rm -f "$SUITE"' EXIT
+docker run --rm --entrypoint cat "$IMAGE" \
+    /opt/coding-runtime/test/conformance.sh > "$SUITE"
+chmod +x "$SUITE"
 
 status=0
-out="$("$SUITE/conformance.sh" "$IMAGE" adapter 2>&1)" || status=$?
+out="$("$SUITE" "$IMAGE" adapter 2>&1)" || status=$?
 printf '%s\n' "$out"
 echo
 
 if [ "$status" -eq 0 ]; then
     echo "The suite passed outright — the upstream limitation is gone."
-    echo "Delete the tolerance in $0 and call it directly."
+    echo "Delete the tolerance in $0 and call the extracted suite directly."
     exit 0
 fi
 

@@ -14,14 +14,9 @@ This repo vendors almost nothing of its own; it is a thin layer over a base imag
 
 **1. The `coding-runtime` base image** — the OS layer, the web terminal, `tini` and the config ETL all come from here, so this is the security-relevant one.
 
-| Location | Form |
-|---|---|
-| `Dockerfile` `ARG BASE` | `ghcr.io/language-operator/coding-runtime:X.Y.Z@sha256:…` — tag **and** digest |
-| `.github/workflows/test.yaml` `env.CODING_RUNTIME_VERSION` | `vX.Y.Z` |
-| `Makefile` `CODING_RUNTIME_VERSION ?=` | `vX.Y.Z` |
-| `hack/conformance.sh` `VERSION="${CODING_RUNTIME_VERSION:-…}"` | `vX.Y.Z` |
+Pinned in exactly one place: `Dockerfile` `ARG BASE`, as `ghcr.io/language-operator/coding-runtime:X.Y.Z@sha256:…` — tag **and** digest.
 
-All four must name the same release. The image tag has no `v`; the git tag does.
+It used to be pinned in four places, because the conformance suite was fetched from a release tarball and had to be told which tag to fetch. Since the suite is extracted from the image under test, the image reference is the only version that exists, and the "all four must move together" hazard is gone. Do not reintroduce a second copy of the version.
 
 **2. The Claude Code CLI** — `Dockerfile`, installed as the npm package `@anthropic-ai/claude-code`.
 
@@ -35,14 +30,18 @@ All four must name the same release. The image tag has no `v`; the git tag does.
 
 - **Pin the base by tag *and* digest.** Never `:latest`.
 - **Never pin a `main` or `sha-` build of the base.** `metadata-action` stamps those with the version literal `main`, which no `requires.codingRuntime` range in `runtime.json` can satisfy — every boot warns about a mismatch that is not real — and which also fails the conformance suite's own `reports a version` check, since that asserts semver. Only released semver tags.
-- **Move all four `coding-runtime` locations together.** A base bump that leaves `CODING_RUNTIME_VERSION` behind runs the old suite against the new image and looks green.
-- **`emit.mjs` may legitimately differ from upstream — never re-copy it blindly.** The copy here is the file that actually runs (`runtime.json` points the emitter at `/opt/adapter/emit.mjs`, which the Dockerfile fills from this repo); the base's `examples/claude-code/emit.mjs` is a template nothing executes. Before taking any upstream copy, check that it still builds its `owns` list **conditionally**:
+- **Bump `requires.codingRuntime` in `runtime.json` when the adapter starts depending on something newer.** It is what makes a build on too old a base fail the manifest check instead of failing at seed time with a confusing error.
+- **`emit.mjs` is the file that actually runs** — `runtime.json` points the emitter at `/opt/adapter/emit.mjs`, which the Dockerfile fills from this repo. The base's `examples/claude-code/emit.mjs` is a template nothing executes, so a difference between them changes behaviour here and nowhere else. Diff before taking any upstream copy.
+
+  **What a flat `owns` list means depends on the base.** On `0.1.2` and later, deletion is provenance-gated: an owned key the emitter does not supply is removed only if the runtime wrote that value and it is unchanged on disk, so listing a conditionally-supplied key is safe and gives correct clean-up in both directions. On `0.1.0`/`0.1.1` it is [#17](https://github.com/language-operator/claude-code-adapter/issues/17) — the runtime deletes an interactive `/login` on every seed. So the check is not "is `owns` conditional" but:
 
   ```bash
-  grep -n 'owns.push\|CLAUDE_JSON_OWNS\|settingsOwns' emit.mjs
+  # Does the base being pinned gate deletion on provenance?
+  gh api repos/language-operator/coding-runtime/contents/src/config/writers.mjs?ref=<vX.Y.Z> \
+    -H 'Accept: application/vnd.github.raw' | grep -c 'provenance'
   ```
 
-  A version that lists `hasCompletedOnboarding`, `oauthAccount` or `model` in a fixed `owns` array, while supplying them only under `if (env.CLAUDE_CODE_OAUTH_TOKEN)` or `if (config.models.primary)`, is the bug from #17: the runtime deletes those keys on every seed, so an interactively-authenticated agent is sent back through onboarding on every pod sleep/wake. Taking that copy reintroduces it. If upstream has not adopted the fix, keep this file and record the divergence in the PR.
+  If it does, take upstream's emitter. If it does not, an emitter that lists `hasCompletedOnboarding`, `oauthAccount` or `model` in a fixed `owns` array while supplying them conditionally will delete user state — keep a conditional version and record the divergence.
 - **Do not unpin anything to make an update easier.** If a pin is in the way, that is the finding — report it rather than loosening it.
 
 ## Steps
@@ -55,7 +54,6 @@ Stop and report if any precondition fails; do not continue past a failure.
 
 ```bash
 grep -nE 'ARG BASE=|npm install -g' Dockerfile
-grep -rn 'CODING_RUNTIME_VERSION' Makefile hack/conformance.sh .github/workflows/
 grep -rn 'uses: .*@' .github/workflows/
 ```
 
@@ -105,7 +103,7 @@ Note anything that reads as a security fix and anything that reads as breaking. 
 
 **5. Apply the updates** for the requested scope.
 
-- **Base:** `ARG BASE` with the new tag **and** digest, then the three `CODING_RUNTIME_VERSION` locations to the matching `vX.Y.Z`.
+- **Base:** `ARG BASE` with the new tag **and** digest. Then `runtime.json` `requires.codingRuntime`, if this bump is what the adapter now depends on.
 - **Vendored files:** fetch the upstream copies at the new tag and **diff** — never overwrite unread.
 
   ```bash
@@ -118,14 +116,7 @@ Note anything that reads as a security fix and anything that reads as breaking. 
 - **Claude Code CLI:** if pinned, bump it. If not, do not silently start pinning as part of a bulk update — raise it.
 - **Actions:** update the `uses:` pins.
 
-**6. Check whether the conformance workaround can go.** `hack/conformance.sh` fetches the suite from a release tarball and tolerates one check by name. Bases from `0.1.1` onward ship the suite in the image and replace that check. If the new base does, delete `hack/conformance.sh` and have `test.yaml` and the `Makefile` extract the suite instead —
-
-```bash
-docker run --rm --entrypoint cat <the base image you pinned> \
-  /opt/coding-runtime/test/conformance.sh > conformance.sh
-```
-
-— which also guarantees the checks match the runtime being checked. The script's own guard exits 0 with a "delete the tolerance" message when the suite passes outright, so a green build after a base bump does not mean the workaround is still needed. Read the output, not the exit code.
+**6. Keep the suite coming from the image.** `make test` and `test.yaml` extract `/opt/coding-runtime/test/conformance.sh` from the image under test, so the checks always match the runtime being checked and the probe the terminal check needs is already beside it. Do not replace this with a fetch from a tag — that is what required a second copy of the version, and a tolerance for a check that had drifted.
 
 **7. Verify.**
 
