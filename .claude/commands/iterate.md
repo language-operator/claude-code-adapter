@@ -97,9 +97,11 @@ This skips issues labelled `in-progress` or `question`, then takes the first mat
 
 Mirror the two PR CI jobs in `.github/workflows/test.yaml`:
 
-- **`make test`** — builds the image and runs `hack/conformance.sh`, which extracts the
-  conformance suite from the image under test so the checks always match the runtime being
-  checked. Mirrors the `image-test` job. One check is tolerated by name; see #23.
+- **`make test`** — builds the image, extracts the conformance suite from the image under
+  test so the checks always match the runtime being checked, and runs it. Mirrors the
+  `image-test` job. One check is declared via `CONFORMANCE_SKIP` ("a keystroke reaches the
+  program under tmux", which an uncredentialed Claude Code cannot render); the suite fails
+  the run if it starts passing, so leave the declaration alone and declare nothing else.
 - **`make lint-chart`**, or `helm lint chart && helm template claude-code chart >/dev/null`.
   Mirrors the `chart-lint` job. Run it whenever you touch `chart/`.
 - Touching `emit.mjs` or `runtime.json`? `node --check emit.mjs` and confirm

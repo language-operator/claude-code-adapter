@@ -17,7 +17,7 @@
 # `requires.codingRuntime` range can satisfy, so every boot would warn about a
 # version mismatch that is not real.
 # -----------------------------------------------------------------------------
-ARG BASE=ghcr.io/language-operator/coding-runtime:0.1.2@sha256:9b3e9e061e369c3ab68936cecbd3ebed37162b7f9994f3424cafa4897b58990f
+ARG BASE=ghcr.io/language-operator/coding-runtime:0.1.4@sha256:2f31ef9b04e72bec3a4bb79db59a82a4aa74f89538cfc118d75e0a852734b0aa
 
 # The CLI is pinned for the same reason the base is: two builds of one git tag
 # must ship the same agent. Unpinned, `npm install -g` took whatever `latest`
@@ -32,7 +32,8 @@ ARG CLAUDE_CODE_VERSION=2.1.287
 FROM ${BASE}
 
 # Claude Code CLI. The thick base already carries node, tmux, gh, glab, Go,
-# Helm, make, shellcheck, ripgrep and vim, so this is the only install left.
+# Helm, make, shellcheck, ripgrep, vim and — since 0.1.4 — python3 and uv, so
+# this is the only install left.
 # ARG is re-declared because the one above FROM is outside the build stage.
 ARG CLAUDE_CODE_VERSION
 USER root

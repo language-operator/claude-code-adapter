@@ -30,16 +30,31 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Extracts the suite from the image under test — it ships inside the base
-      # image — so the checks always match the runtime being checked and the
-      # probe the terminal check needs is already beside it. Runs under the
-      # posture the operator imposes and an adapter cannot override: read-only
-      # root, uid 1000, all capabilities dropped, tmpfs /tmp. Checks doctor, that
-      # seeding is idempotent and writes nothing outside /tmp and /workspace, the
-      # probe endpoints, manifest redaction, and the cross-origin WebSocket
-      # guard. See the script for the one check it tolerates, and why.
+      # Taken out of the image rather than fetched from a tag: the suite the base
+      # ships is by construction the one that matches the runtime being checked,
+      # and it brings its own probe, so there is no version to keep in step here.
+      - name: Extract the conformance suite from the image
+        run: |
+          docker run --rm --entrypoint cat claude-code-adapter:test \
+            /opt/coding-runtime/test/conformance.sh > conformance.sh
+          chmod +x conformance.sh
+
+      # Runs the image under the posture the operator imposes and an adapter
+      # cannot override: read-only root, uid 1000, all capabilities dropped,
+      # tmpfs /tmp. Checks doctor, that seeding is idempotent and writes nothing
+      # outside /tmp and /workspace, the probe endpoints, manifest redaction and
+      # the cross-origin WebSocket guard.
+      #
+      # CONFORMANCE_SKIP declares the one check Claude Code cannot pass: it greps
+      # the tmux pane for typed text, and an uncredentialed Claude Code sits on
+      # its first-run theme picker, a menu that renders none of it. The suite
+      # still runs the check and fails this job if it starts passing — or if the
+      # declaration ever stops matching a real check — so the declaration cannot
+      # outlive what justifies it. See Makefile for the long version.
       - name: Run conformance suite
-        run: ./hack/conformance.sh claude-code-adapter:test
+        env:
+          CONFORMANCE_SKIP: a keystroke reaches the program under tmux
+        run: ./conformance.sh claude-code-adapter:test adapter
 
   chart-lint:
     runs-on: ubuntu-latest

@@ -35,20 +35,23 @@ agent container only, so an init container would share no writable path with it.
 - `chart/` — the `LanguageAgentRuntime` chart. Consumed by the umbrella
   `language-operator-runtimes` chart as subchart `claude-code`, with values keyed
   `claude-code.*`.
-- `hack/conformance.sh` — runs the base's conformance suite, extracted from the image
-  under test. Tolerates one check by name — "a keystroke reaches the program under tmux",
-  which Claude Code cannot pass because an uncredentialed container sits on the first-run
-  theme picker, a menu that renders none of the typed text
-  ([coding-runtime#27](https://github.com/language-operator/coding-runtime/pull/27)). That
-  PR merged `CONFORMANCE_SKIP` upstream, which does this accounting in the suite; it is in
-  no released base yet, so **when `ARG BASE` moves to one that has it, delete this script**
-  and pass the declaration to the extracted suite instead. The script's header says how.
+There is no `hack/` — `hack/conformance.sh` existed to let one check fail by name and was
+deleted once base `0.1.4` shipped `CONFORMANCE_SKIP`, which does that accounting inside the
+suite. Both `make test` and `test.yaml` now extract the suite from the image and declare the
+check directly.
 
 ## Testing
 
-- `make test` — builds the image and runs `hack/conformance.sh` against it under the
-  posture the operator imposes and an adapter cannot override: read-only root, uid 1000,
-  all capabilities dropped, tmpfs `/tmp`. A failure here is a failure in-cluster.
+- `make test` — builds the image, extracts `/opt/coding-runtime/test/conformance.sh` from
+  it, and runs the suite under the posture the operator imposes and an adapter cannot
+  override: read-only root, uid 1000, all capabilities dropped, tmpfs `/tmp`. A failure here
+  is a failure in-cluster.
+- **One check is declared via `CONFORMANCE_SKIP`**, in the `Makefile` and in `test.yaml`:
+  "a keystroke reaches the program under tmux", which greps the tmux pane for typed text
+  that an uncredentialed Claude Code never renders — it sits on the first-run theme picker.
+  The suite still runs it and **fails the run if it starts passing, or if the declaration
+  stops matching a real check**, so the declaration cannot rot. Keep the two copies in step,
+  and declare nothing else: a check failing because the image is wrong is the suite working.
 - `make lint-chart`, or `helm lint chart && helm template claude-code chart >/dev/null`.
 - CI correctness == the two `.github/workflows/test.yaml` jobs: `image-test` and
   `chart-lint`. **`make test` needs Docker, which an agent pod does not have** — when it is
