@@ -17,7 +17,7 @@
 # `requires.codingRuntime` range can satisfy, so every boot would warn about a
 # version mismatch that is not real.
 # -----------------------------------------------------------------------------
-ARG BASE=ghcr.io/language-operator/coding-runtime:0.1.2@sha256:9b3e9e061e369c3ab68936cecbd3ebed37162b7f9994f3424cafa4897b58990f
+ARG BASE=ghcr.io/language-operator/coding-runtime:0.1.3@sha256:582a1962023323174f077dba7ff1bf0aef2e68bf14eb7a594045cccb5e0f83a6
 
 # The CLI is pinned for the same reason the base is: two builds of one git tag
 # must ship the same agent. Unpinned, `npm install -g` took whatever `latest`

@@ -21,8 +21,9 @@
 #      ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 #       Syntax theme: Monokai Extended (ctrl+t to disable)
 #
-# Still the case on base 0.1.2: 34 passed, 1 failed, image-test on main at
-# ddf4daf (run 36901189492, 2026-10-01).
+# Last observed on base 0.1.2: 34 passed, 1 failed, image-test on main at
+# ddf4daf (run 36901189492, 2026-10-01). 0.1.3 ships a byte-identical
+# test/conformance.sh, so the bump to it changed nothing here.
 #
 # The terminal path itself is proven by the check before it — "the terminal
 # socket carries traffic both ways" passes, and the tmux session exists — so what
