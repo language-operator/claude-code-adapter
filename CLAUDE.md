@@ -36,7 +36,13 @@ agent container only, so an init container would share no writable path with it.
   `language-operator-runtimes` chart as subchart `claude-code`, with values keyed
   `claude-code.*`.
 - `hack/conformance.sh` — runs the base's conformance suite, extracted from the image
-  under test. Tolerates one check by name; see #23.
+  under test. Tolerates one check by name — "a keystroke reaches the program under tmux",
+  which Claude Code cannot pass because an uncredentialed container sits on the first-run
+  theme picker, a menu that renders none of the typed text
+  ([coding-runtime#27](https://github.com/language-operator/coding-runtime/pull/27)). That
+  PR merged `CONFORMANCE_SKIP` upstream, which does this accounting in the suite; it is in
+  no released base yet, so **when `ARG BASE` moves to one that has it, delete this script**
+  and pass the declaration to the extracted suite instead. The script's header says how.
 
 ## Testing
 

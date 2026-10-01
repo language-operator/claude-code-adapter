@@ -17,19 +17,41 @@
 #
 #       2 -  console.log("Hello, World!");
 #       2 +  console.log("Hello, Claude!");
+#       3  }
 #      ╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
 #       Syntax theme: Monokai Extended (ctrl+t to disable)
+#
+# Still the case on base 0.1.2: 34 passed, 1 failed, image-test on main at
+# ddf4daf (run 36901189492, 2026-10-01).
 #
 # The terminal path itself is proven by the check before it — "the terminal
 # socket carries traffic both ways" passes, and the tmux session exists — so what
 # fails is the assumption about what the program does with the keystrokes, not
 # their delivery.
 #
-# Tracked upstream: https://github.com/language-operator/coding-runtime/issues/4
+# Tracked upstream: https://github.com/language-operator/coding-runtime/pull/27
+#
+# Not #4, which this comment used to cite. #4 was the *predecessor* check, which
+# required a shell to reconstitute a marker and so could not pass for any TUI;
+# replacing it was the right fix and closing it as completed was correct. The
+# replacement works for a TUI showing its prompt box — opencode-adapter passes it
+# outright and has no wrapper at all — it just still assumes the program got that
+# far, which Claude Code without credentials does not.
 #
 # So it is tolerated — by name, and nothing else is. Any other failure fails the
 # run, as does this one disappearing: if the suite starts passing outright, the
 # tolerance has outlived the limitation and should be deleted.
+#
+# This whole script is scaffolding with an end date. #27 merged CONFORMANCE_SKIP
+# into the suite: the declaration is passed in, a declared check still runs, and
+# the suite itself fails the run if a declared check starts passing — the
+# accounting below, done once upstream instead of per adapter. It is not in a
+# released base yet (not in 0.1.2, not in 0.1.3), so until ARG BASE moves to one
+# that has it, this stays. When it does, delete this file and run the extracted
+# suite directly with:
+#
+#       CONFORMANCE_SKIP="a keystroke reaches the program under tmux" \
+#         ./conformance.sh claude-code-adapter:test adapter
 set -euo pipefail
 
 IMAGE="${1:?usage: hack/conformance.sh <image>}"
