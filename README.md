@@ -102,5 +102,5 @@ helm install claude-code chart --namespace language-operator --set image.pullPol
 - `build-image.yaml` — builds and pushes the image to `ghcr.io` on push to `main` and `v*` tags.
 - `release-chart.yaml` — packages `chart/` and pushes it to `oci://ghcr.io/language-operator/charts`, **on `v*` tags only**: a published chart version is immutable in practice, so publishing is a release action rather than a merge action.
 - `test.yaml` — builds the image, runs the `coding-runtime` conformance suite
-  against it (`hack/conformance.sh`, pinned to the tag the Dockerfile pins), and
-  lints/templates the chart on every PR.
+  against it (extracted from the image under test, so there is no suite version
+  to keep in step), and lints/templates the chart on every PR.
