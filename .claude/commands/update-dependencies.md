@@ -18,9 +18,11 @@ Pinned in exactly one place: `Dockerfile` `ARG BASE`, as `ghcr.io/language-opera
 
 It used to be pinned in four places, because the conformance suite was fetched from a release tarball and had to be told which tag to fetch. Since the suite is extracted from the image under test, the image reference is the only version that exists, and the "all four must move together" hazard is gone. Do not reintroduce a second copy of the version.
 
-**2. The Claude Code CLI** — `Dockerfile`, installed as the npm package `@anthropic-ai/claude-code`.
+**2. The Claude Code CLI** — `Dockerfile` `ARG CLAUDE_CODE_VERSION`, installed as `@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}`.
 
-> **This is currently unpinned** (`npm install -g @anthropic-ai/claude-code`), so every image build takes whatever `latest` is at that moment and two builds of the same commit can ship different CLIs. Pinning it is a real change in behaviour, not a version bump — raise it as its own decision rather than folding it into a routine update. If it is still unpinned when you run this, say so in the report.
+This is the agent itself, so it is the dependency that moves most often. It is pinned to an exact version — never a range and never `latest` — so two builds of one git tag ship the same agent.
+
+> **A pin is why this command matters for the CLI.** While it was unpinned, every rebuild silently picked up upstream's security fixes. Pinned, those fixes arrive only when this number moves, which is here. `@anthropic-ai/claude-code` publishes often and advisories against it are routine, so treat a stale CLI pin as a finding in its own right rather than as a tidy-up — check its advisories (step 4) even when the version gap looks small.
 
 **3. GitHub Actions** — across `.github/workflows/{test,build-image,release-chart}.yaml`: `actions/checkout`, `docker/setup-buildx-action`, `docker/login-action`, `docker/metadata-action`, `docker/build-push-action`, `azure/setup-helm`.
 
@@ -53,7 +55,7 @@ Stop and report if any precondition fails; do not continue past a failure.
 **2. Record the current state** — the "before" column of the audit trail.
 
 ```bash
-grep -nE 'ARG BASE=|npm install -g' Dockerfile
+grep -nE 'ARG BASE=|ARG CLAUDE_CODE_VERSION=' Dockerfile
 grep -rn 'uses: .*@' .github/workflows/
 ```
 
@@ -75,11 +77,13 @@ curl -sI -H "Authorization: Bearer $T" \
 
 Take the **thick** variant — the unsuffixed tag. `-python` is the thin base and carries no Node, no tmux and no serving surface.
 
-Claude Code CLI — the `latest` dist-tag:
+Claude Code CLI — the dist-tags, and take `latest`:
 
 ```bash
 npm view @anthropic-ai/claude-code dist-tags --json
 ```
+
+`latest` is what the install resolved to before it was pinned, so it is the version to keep taking; `stable` usually trails it by a few patches. If you take `stable` instead — a release where the extra caution is worth it, say — record which tag you took and why, because the next run will otherwise read it as a version that went backwards.
 
 If npm fails with `ENOENT … mkdir`, the cache directory is read-only; re-run with `npm_config_cache="$(mktemp -d)"` prefixed.
 
@@ -113,7 +117,7 @@ Note anything that reads as a security fix and anything that reads as breaking. 
   ```
 
   For `runtime.json`, take upstream unless it changes something this adapter deliberately sets; a new field is a real decision, so surface it rather than copying past it. For `emit.mjs`, apply the divergence rule above — a diff that removes the conditional `owns` is a regression, not an update.
-- **Claude Code CLI:** if pinned, bump it. If not, do not silently start pinning as part of a bulk update — raise it.
+- **Claude Code CLI:** `ARG CLAUDE_CODE_VERSION` to the exact new version. Nothing else references it — the install line interpolates the ARG — so this is a one-line change.
 - **Actions:** update the `uses:` pins.
 
 **6. Keep the suite coming from the image.** `make test` and `test.yaml` extract `/opt/coding-runtime/test/conformance.sh` from the image under test, so the checks always match the runtime being checked and the probe the terminal check needs is already beside it. Do not replace this with a fetch from a tag — that is what required a second copy of the version, and a tolerance for a check that had drifted.
@@ -140,6 +144,6 @@ The PR body is the audit record. For each dependency:
 | Notes | link to the release, one line on what changed |
 | Security | the advisory it addresses, or "no advisories in range" |
 
-End with what you did **not** update and why — a held-back major, a pin with a breaking change, a dependency with no newer release, the CLI still unpinned. An empty "not updated" section should be written as such, not omitted.
+End with what you did **not** update and why — a held-back major, a pin with a breaking change, a dependency with no newer release, a CLI version deliberately left behind. An empty "not updated" section should be written as such, not omitted.
 
 **9. Report.** What moved, what did not, and anything needing a human decision. If a bump carries a breaking change this repo has to absorb — the `HOME` relocation in the `0.1.0` migration is the worked example — say so explicitly rather than burying it in the diff.
