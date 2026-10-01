@@ -10,7 +10,7 @@ This runs for security and compliance: the point is not only that versions move,
 
 ## The dependency surface
 
-This repo vendors almost nothing of its own; it is a thin layer over a base image. Four groups, two of which span multiple files that must move together.
+This repo carries almost no code of its own; it is a thin layer over a base image. Four groups: two are single pins, one spans several workflow files, and the last is not a pin at all but a pair of files shared with upstream, checked for drift rather than bumped.
 
 **1. The `coding-runtime` base image** — the OS layer, the web terminal, `tini` and the config ETL all come from here, so this is the security-relevant one.
 
@@ -26,14 +26,20 @@ This is the agent itself, so it is the dependency that moves most often. It is p
 
 **3. GitHub Actions** — across `.github/workflows/{test,build-image,release-chart}.yaml`: `actions/checkout`, `docker/setup-buildx-action`, `docker/login-action`, `docker/metadata-action`, `docker/build-push-action`, `azure/setup-helm`.
 
-**4. Vendored upstream files** — `runtime.json` and `emit.mjs` started as verbatim copies of `examples/claude-code/` in `coding-runtime`. Nothing fails when they drift, which is exactly why they get missed. **Read the divergence rule below before re-copying either.**
+**4. Files shared with `coding-runtime`** — `runtime.json` and `emit.mjs`, which also exist as `examples/claude-code/` upstream.
+
+**This repo is the source of truth, and the direction is the opposite of what it looks like.** They began as copies taken *from* upstream, so the old instinct was to re-copy them *from* upstream on every base bump. Since base `0.1.3`, upstream's [`example-drift.yaml`](https://github.com/language-operator/coding-runtime/blob/main/.github/workflows/example-drift.yaml) fetches both files from **this repo's `main`** and fails **its own** CI when its examples differ — weekly, and on any PR there touching `examples/`. Their copies are generated from ours: they are the authoring reference the upstream docs point at, the source its CI fixture adapter is built from, and what its emitted goldens are generated against.
+
+So drift is no longer silent, and it is no longer ours to absorb by overwriting. **Read the divergence rule below before taking any upstream copy.**
 
 ## Rules that must not be broken
 
 - **Pin the base by tag *and* digest.** Never `:latest`.
 - **Never pin a `main` or `sha-` build of the base.** `metadata-action` stamps those with the version literal `main`, which no `requires.codingRuntime` range in `runtime.json` can satisfy — every boot warns about a mismatch that is not real — and which also fails the conformance suite's own `reports a version` check, since that asserts semver. Only released semver tags.
 - **Bump `requires.codingRuntime` in `runtime.json` when the adapter starts depending on something newer.** It is what makes a build on too old a base fail the manifest check instead of failing at seed time with a confusing error.
-- **`emit.mjs` is the file that actually runs** — `runtime.json` points the emitter at `/opt/adapter/emit.mjs`, which the Dockerfile fills from this repo. The base's `examples/claude-code/emit.mjs` is a template nothing executes, so a difference between them changes behaviour here and nowhere else. Diff before taking any upstream copy.
+- **`emit.mjs` is the file that actually runs *here*** — `runtime.json` points the emitter at `/opt/adapter/emit.mjs`, which the Dockerfile fills from this repo. Nothing upstream runs this adapter's emitter in production, so a change made here is a change to this runtime's behaviour and to nothing else.
+
+  Upstream's copy is not inert, though: its CI builds a fixture adapter from `examples/` and generates emitted goldens against it. A drift therefore has consequences in both repos — wrong behaviour here, or wrong goldens there — which is why the resolution is to make both sides match deliberately rather than to leave one wrong. Diff before taking any upstream copy.
 
   **What a flat `owns` list means depends on the base.** On `0.1.2` and later, deletion is provenance-gated: an owned key the emitter does not supply is removed only if the runtime wrote that value and it is unchanged on disk, so listing a conditionally-supplied key is safe and gives correct clean-up in both directions. On `0.1.0`/`0.1.1` it is [#17](https://github.com/language-operator/claude-code-adapter/issues/17) — the runtime deletes an interactive `/login` on every seed. So the check is not "is `owns` conditional" but:
 
@@ -43,7 +49,7 @@ This is the agent itself, so it is the dependency that moves most often. It is p
     -H 'Accept: application/vnd.github.raw' | grep -c 'provenance'
   ```
 
-  If it does, take upstream's emitter. If it does not, an emitter that lists `hasCompletedOnboarding`, `oauthAccount` or `model` in a fixed `owns` array while supplying them conditionally will delete user state — keep a conditional version and record the divergence.
+  If it does, a flat `owns` list is safe — so upstream's emitter is safe to take, *if* the drift rule says to take it at all. If it does not, an emitter that lists `hasCompletedOnboarding`, `oauthAccount` or `model` in a fixed `owns` array while supplying them conditionally will delete user state — keep a conditional version and record the divergence.
 - **Do not unpin anything to make an update easier.** If a pin is in the way, that is the finding — report it rather than loosening it.
 
 ## Steps
@@ -108,15 +114,25 @@ Note anything that reads as a security fix and anything that reads as breaking. 
 **5. Apply the updates** for the requested scope.
 
 - **Base:** `ARG BASE` with the new tag **and** digest. Then `runtime.json` `requires.codingRuntime`, if this bump is what the adapter now depends on.
-- **Vendored files:** fetch the upstream copies at the new tag and **diff** — never overwrite unread.
+- **Shared files:** diff against the upstream copies — at the new tag *and* at upstream `main`, since its examples track this repo continuously rather than per release. This is a **drift check**, not a sync step: the expected result is "identical", and in that case there is nothing to do.
 
   ```bash
-  gh api repos/language-operator/coding-runtime/contents/examples/claude-code/runtime.json?ref=<vX.Y.Z> -H 'Accept: application/vnd.github.raw' > /tmp/runtime.json
-  gh api repos/language-operator/coding-runtime/contents/examples/claude-code/emit.mjs?ref=<vX.Y.Z>     -H 'Accept: application/vnd.github.raw' > /tmp/emit.mjs
-  diff -u runtime.json /tmp/runtime.json; diff -u emit.mjs /tmp/emit.mjs
+  d=$(mktemp -d)
+  for ref in <vX.Y.Z> main; do
+    for f in runtime.json emit.mjs; do
+      gh api "repos/language-operator/coding-runtime/contents/examples/claude-code/$f?ref=$ref" \
+        -H 'Accept: application/vnd.github.raw' > "$d/$ref-$f"
+      diff -u "$f" "$d/$ref-$f" --label "$f (here)" --label "examples/claude-code/$f ($ref)" \
+        && echo "identical: $f vs $ref"
+    done
+  done
   ```
 
-  For `runtime.json`, take upstream unless it changes something this adapter deliberately sets; a new field is a real decision, so surface it rather than copying past it. For `emit.mjs`, apply the divergence rule above — a diff that removes the conditional `owns` is a regression, not an update.
+  **If they differ, decide which side is right before touching anything — do not default to copying.** Ours is what runs, and upstream's CI already treats ours as correct, so the common case is that *their* copy is stale and the fix belongs in a PR there, not here. Take upstream's version only when it is upstream that deliberately changed, which in practice means a new base genuinely expects something new — a `runtime.json` field the manifest check now reads, or an emitter change that goes with a new `ctx.*` helper. Even then it is a real decision: say in the PR body what the field does and why this adapter wants it, rather than copying past it.
+
+  For `emit.mjs`, also apply the divergence rule above: a diff that removes a conditional `owns` is a regression, not an update.
+
+  Either way, **record the drift and the direction you resolved it in.** A diff found and silently flattened is the one outcome that makes both repos wrong.
 - **Claude Code CLI:** `ARG CLAUDE_CODE_VERSION` to the exact new version. Nothing else references it — the install line interpolates the ARG — so this is a one-line change.
 - **Actions:** update the `uses:` pins.
 

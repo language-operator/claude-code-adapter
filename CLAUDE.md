@@ -25,10 +25,17 @@ agent container only, so an init container would share no writable path with it.
   `env.CLAUDE_CONFIG_DIR` is `${WORKSPACE}/.claude`, so credentials, sessions and project
   history live on the workspace PVC and survive restarts.
 - `emit.mjs` → `/opt/adapter/emit.mjs` — translates the normalized operator config into
-  `settings.json` and `.claude.json`. **This is the copy that actually runs.** The base's
-  `examples/claude-code/emit.mjs` is a template nothing executes, so a difference between
-  them changes behaviour here and nowhere else. Both this and `runtime.json` are vendored
-  from that example — diff against upstream before changing either.
+  `settings.json` and `.claude.json`. **This is the copy that actually runs**, so a change
+  here changes this runtime's behaviour and nothing else.
+
+  It and `runtime.json` also exist upstream as `examples/claude-code/`, and **this repo is
+  the source of truth for both.** They started as copies taken from there, which makes the
+  instinct on a base bump to re-copy them — wrong since base `0.1.3`, whose
+  `example-drift.yaml` fetches both from this repo's `main` and fails *upstream's* CI when
+  its examples differ. Their copies are generated from ours and feed their docs, CI fixture
+  adapter and emitted goldens. So diff on every base bump, but when they differ, expect
+  **their** copy to be the stale one and fix it there; take upstream's only when a new base
+  genuinely expects something new, and say so explicitly.
 - `launch-claude.sh` → `/usr/local/bin/launch-claude` — what tmux runs: `--continue` only
   when a conversation exists for this directory, `AGENT_PERSONA` via
   `--append-system-prompt`, `AGENT_INSTRUCTIONS` as the opening message.
