@@ -56,6 +56,11 @@ agent container only, so an init container would share no writable path with it.
   owned by the umbrella chart, and Helm's 3-way merge then cannot update the image.
 - `make publish` — push image tags. `make uninstall` — remove the release.
 
+**Both upstreams are pinned.** The Claude Code CLI is `ARG CLAUDE_CODE_VERSION`, an exact
+version — unpinned, a rebuild of a release tag shipped a different agent than the release
+did. The flip side is that CLI security fixes now arrive only when that number moves, which
+is `/update-dependencies`' job.
+
 **The base is pinned by tag *and* digest** in `ARG BASE`. Never `:latest`, and never a
 `main` build — `metadata-action` stamps those with the version literal `main`, which no
 `requires.codingRuntime` range can satisfy, so every boot warns about a mismatch that is

@@ -19,12 +19,24 @@
 # -----------------------------------------------------------------------------
 ARG BASE=ghcr.io/language-operator/coding-runtime:0.1.2@sha256:9b3e9e061e369c3ab68936cecbd3ebed37162b7f9994f3424cafa4897b58990f
 
+# The CLI is pinned for the same reason the base is: two builds of one git tag
+# must ship the same agent. Unpinned, `npm install -g` took whatever `latest`
+# was at build time, so a rebuild of a release tag silently shipped a different
+# Claude Code than the release did.
+#
+# The cost of a pin is that CLI security fixes no longer arrive by rebuilding —
+# they arrive when this number moves. /update-dependencies bumps it alongside
+# the base, and that is what keeps the pin from going stale.
+ARG CLAUDE_CODE_VERSION=2.1.287
+
 FROM ${BASE}
 
 # Claude Code CLI. The thick base already carries node, tmux, gh, glab, Go,
 # Helm, make, shellcheck, ripgrep and vim, so this is the only install left.
+# ARG is re-declared because the one above FROM is outside the build stage.
+ARG CLAUDE_CODE_VERSION
 USER root
-RUN npm install -g --no-audit --no-fund @anthropic-ai/claude-code \
+RUN npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     && npm cache clean --force
 
 # runtime.json  — what this adapter is: config dir, serving surface, tmux launch.
