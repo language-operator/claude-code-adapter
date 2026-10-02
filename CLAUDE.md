@@ -60,6 +60,12 @@ check directly.
   stops matching a real check**, so the declaration cannot rot. Keep the two copies in step,
   and declare nothing else: a check failing because the image is wrong is the suite working.
 - `make lint-chart`, or `helm lint chart && helm template claude-code chart >/dev/null`.
+  Run it whenever you touch `chart/`.
+- Touching `emit.mjs` or `runtime.json`? `node --check emit.mjs`, and confirm
+  `runtime.json` parses (`node -e "JSON.parse(require('fs').readFileSync('runtime.json','utf8'))"`).
+  Neither is covered by the conformance suite, which checks the config the emitter
+  *produces* rather than the file itself. See **Key files** above for which copy runs and
+  which way drift against upstream is resolved.
 - CI correctness == the two `.github/workflows/test.yaml` jobs: `image-test` and
   `chart-lint`. **`make test` needs Docker, which an agent pod does not have** — when it is
   unavailable, say so and let CI be the gate rather than implying the suite ran.
@@ -97,8 +103,21 @@ Dependencies move with `/update-dependencies`.
 
 ## Issue-driven workflow
 
-`/iterate [#issue] [--auto]` (`.claude/commands/iterate.md`) runs one issue from selection
-to a merged PR and a closed issue, then stops. Work happens in a git worktree under
-`.claude/worktrees/`. The command body and the scripts in `.claude/commands/iterate/` are
-canonical across the org (language-operator#932) — only the `allowed-tools` build tools and
-the `## Testing` section are ours to change.
+`/iterate [#issue] [--auto]` runs one issue from selection to a merged PR and a closed
+issue, then stops. Work happens in a git worktree under `.claude/worktrees/`.
+
+It is **not a file in this repo**. It comes from the `iterate` skill in the `langop`
+plugin ([language-operator/skills](https://github.com/language-operator/skills)), pinned by
+`ref` in `.claude/settings.json` — currently `v0.1.0`. `/iterate` and `/langop:iterate` both
+run it. Take a newer release by changing that `ref`; there is nothing to re-copy and no
+drift to reconcile, which is why the local copy was deleted.
+
+**The one per-repo part is the `## Testing` section of this file** — the skill reads it by
+heading name, so keep that heading exactly `## Testing`. Machine-specific permissions go in
+`.claude/settings.local.json`, which is gitignored; `.claude/settings.json` is committed and
+holds only the plugin and marketplace entries.
+
+An interactive session needs no install step. A non-interactive run (`claude -p`, a
+scheduled agent) loads only explicitly installed plugins, so it needs
+`claude plugin marketplace add 'language-operator/skills#v0.1.0'` and
+`claude plugin install langop@language-operator --scope project` once, at the pinned tag.
