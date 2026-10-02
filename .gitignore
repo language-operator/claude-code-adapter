@@ -3,5 +3,5 @@ npm-debug.log
 .DS_Store
 .helm-packages/
 *.tgz
-.claude/settings.json
+.claude/settings.local.json
 .claude/worktrees/
