@@ -35,6 +35,10 @@ publish: build
 	docker push $(IMAGE):$(TAG)
 	docker push $(IMAGE):latest
 
+# The suite checks task mode with manifests of its own, so test/task-mode.sh then
+# runs this image's actual task command, Claude Code included, against a mock of
+# the Messages API: exit 0 on a good model, non-zero on a bad one or no
+# instructions, and the langop plugin installed for a repo that pins it.
 test: build
 	@suite=$$(mktemp -t conformance.XXXXXX.sh); \
 	trap 'rm -f "$$suite"' EXIT; \
@@ -42,6 +46,7 @@ test: build
 	    /opt/coding-runtime/test/conformance.sh > "$$suite"; \
 	chmod +x "$$suite"; \
 	CONFORMANCE_SKIP="$(CONFORMANCE_SKIP)" "$$suite" $(IMAGE):$(TAG) adapter
+	test/task-mode.sh $(IMAGE):$(TAG)
 
 dev: build
 	docker save $(IMAGE):$(TAG) | sudo k3s ctr images import -

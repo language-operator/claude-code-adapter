@@ -6,11 +6,11 @@ Guidance for working in the `claude-code-adapter` repository.
 
 A [Language Operator](https://github.com/language-operator) **runtime** that runs
 [Claude Code](https://claude.com/claude-code) as an interactive terminal agent on
-Kubernetes. It is built on
+Kubernetes, or headless as a task agent (`spec.execution.mode: task`). It is built on
 [`coding-runtime`](https://github.com/language-operator/coding-runtime), which owns the OS
 layer, the xterm.js / tmux web terminal, `tini` as PID 1, and the
-`/etc/agent/config.yaml` ETL. What lives here is the Claude Code CLI plus **three files
-that describe it to the base**: a manifest, an emitter and a launcher.
+`/etc/agent/config.yaml` ETL. What lives here is the Claude Code CLI plus **the files
+that describe it to the base**: a manifest, an emitter and two launchers.
 
 It ships as a **single image** plus a **Helm chart** registering the cluster-scoped
 `claude-code` `LanguageAgentRuntime`. There is **no init container** — the base seeds
@@ -21,24 +21,25 @@ agent container only, so an init container would share no writable path with it.
 
 - `runtime.json` → `/etc/coding-runtime/runtime.json` — the manifest the base reads:
   `requires.codingRuntime` (the base range this adapter needs), `serve.surface: terminal`,
-  `terminal.launch: ["launch-claude"]`, `terminal.cwd`, and the emitter path.
+  `terminal.launch: ["launch-claude"]`, `terminal.cwd`, `task.exec: ["launch-claude-task"]`,
+  and the emitter path.
   `env.CLAUDE_CONFIG_DIR` is `${WORKSPACE}/.claude`, so credentials, sessions and project
   history live on the workspace PVC and survive restarts.
 - `emit.mjs` → `/opt/adapter/emit.mjs` — translates the normalized operator config into
-  `settings.json` and `.claude.json`. **This is the copy that actually runs**, so a change
-  here changes this runtime's behaviour and nothing else.
-
-  It and `runtime.json` also exist upstream as `examples/claude-code/`, and **this repo is
-  the source of truth for both.** They started as copies taken from there, which makes the
-  instinct on a base bump to re-copy them — wrong since base `0.1.3`, whose
-  `example-drift.yaml` fetches both from this repo's `main` and fails *upstream's* CI when
-  its examples differ. Their copies are generated from ours and feed their docs, CI fixture
-  adapter and emitted goldens. So diff on every base bump, but when they differ, expect
-  **their** copy to be the stale one and fix it there; take upstream's only when a new base
-  genuinely expects something new, and say so explicitly.
+  `settings.json`, `.claude.json` and `task.md` (the task-mode prompt). There is no
+  upstream copy to keep in step any more: `examples/claude-code/` and `example-drift.yaml`
+  were deleted upstream (coding-runtime #37), whose examples now demonstrate behaviours
+  rather than mirror adapters. On a base bump, read upstream's
+  `docs/authoring-an-adapter.md` for what a new base expects, not an example.
 - `launch-claude.sh` → `/usr/local/bin/launch-claude` — what tmux runs: `--continue` only
   when a conversation exists for this directory, `AGENT_PERSONA` via
   `--append-system-prompt`, `AGENT_INSTRUCTIONS` as the opening message.
+- `launch-claude-task.sh` → `/usr/local/bin/launch-claude-task` — what a task-mode run
+  executes, in `${WORKDIR}`: fails on an empty `task.md`; installs the `langop` plugin at
+  the marketplace `ref` pinned in the working directory's `.claude/settings.json`, when that
+  file enables it; then `claude -p --dangerously-skip-permissions --output-format
+  stream-json --verbose` with `task.md` on stdin. Its exit code is the run's phase.
+- `test/task-mode.sh`, `test/mock-anthropic.mjs` — the task-mode test; see **Testing**.
 - `chart/` — the `LanguageAgentRuntime` chart. Consumed by the umbrella
   `language-operator-runtimes` chart as subchart `claude-code`, with values keyed
   `claude-code.*`.
@@ -52,7 +53,18 @@ check directly.
 - `make test` — builds the image, extracts `/opt/coding-runtime/test/conformance.sh` from
   it, and runs the suite under the posture the operator imposes and an adapter cannot
   override: read-only root, uid 1000, all capabilities dropped, tmpfs `/tmp`. A failure here
-  is a failure in-cluster.
+  is a failure in-cluster. It then runs `test/task-mode.sh`, under the same posture.
+- `test/task-mode.sh <image>` — the suite checks task mode only with manifests of its own,
+  so this runs the image's real `launch-claude-task` and `claude -p` against
+  `test/mock-anthropic.mjs`. It checks four things: a good model exits 0 with the
+  instructions as the prompt, a bad model exits non-zero, no instructions exits non-zero
+  naming `spec.instructions`, and a repo pinning the `langop` plugin gets it installed and
+  loaded. That last check clones `language-operator/skills`, so it needs GitHub egress.
+  Only the test's containers are pointed at the mock; the runtime itself writes no
+  endpoint or credential. Touching `launch-claude-task.sh`? You can run it outside Docker
+  against the local `claude` and the mock: set `CLAUDE_CONFIG_DIR` to a scratch dir
+  holding `settings.json` (`{"model":"<MOCK_MODEL>"}`) and `task.md`, and point
+  `ANTHROPIC_BASE_URL`/`ANTHROPIC_API_KEY` at the mock.
 - **One check is declared via `CONFORMANCE_SKIP`**, in the `Makefile` and in `test.yaml`:
   "a keystroke reaches the program under tmux", which greps the tmux pane for typed text
   that an uncredentialed Claude Code never renders — it sits on the first-run theme picker.
@@ -64,8 +76,7 @@ check directly.
 - Touching `emit.mjs` or `runtime.json`? `node --check emit.mjs`, and confirm
   `runtime.json` parses (`node -e "JSON.parse(require('fs').readFileSync('runtime.json','utf8'))"`).
   Neither is covered by the conformance suite, which checks the config the emitter
-  *produces* rather than the file itself. See **Key files** above for which copy runs and
-  which way drift against upstream is resolved.
+  *produces* rather than the file itself.
 - CI correctness == the two `.github/workflows/test.yaml` jobs: `image-test` and
   `chart-lint`. **`make test` needs Docker, which an agent pod does not have** — when it is
   unavailable, say so and let CI be the gate rather than implying the suite ran.
