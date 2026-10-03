@@ -3,8 +3,8 @@
 #
 # The OS layer, the web terminal, tini, and the /etc/agent/config.yaml ETL all
 # live in coding-runtime. What is left here is the Claude Code CLI plus the
-# three files that describe it to the base: a manifest, an emitter, and a
-# launcher.
+# files that describe it to the base: a manifest, an emitter, and two
+# launchers — one for the terminal, one for a task-mode run.
 #
 # Much of that base came from this repo — server.mjs, index.html, tmux.conf and
 # the cross-origin guard were lifted out of it, and src/serve/origin.mjs still
@@ -17,7 +17,7 @@
 # `requires.codingRuntime` range can satisfy, so every boot would warn about a
 # version mismatch that is not real.
 # -----------------------------------------------------------------------------
-ARG BASE=ghcr.io/language-operator/coding-runtime:0.1.4@sha256:2f31ef9b04e72bec3a4bb79db59a82a4aa74f89538cfc118d75e0a852734b0aa
+ARG BASE=ghcr.io/language-operator/coding-runtime:0.1.6@sha256:318a540d9d062689d3ed6c0de34fb353ff076bb16c5770bcf296398c6e5a5412
 
 # The CLI is pinned for the same reason the base is: two builds of one git tag
 # must ship the same agent. Unpinned, `npm install -g` took whatever `latest`
@@ -40,12 +40,14 @@ USER root
 RUN npm install -g --no-audit --no-fund "@anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}" \
     && npm cache clean --force
 
-# runtime.json  — what this adapter is: config dir, serving surface, tmux launch.
-# emit.mjs      — normalized operator config -> settings.json + .claude.json.
-# launch-claude — what tmux runs inside the terminal.
+# runtime.json       — what this adapter is: config dir, serving surface, tmux launch.
+# emit.mjs           — normalized operator config -> settings.json + .claude.json.
+# launch-claude      — what tmux runs inside the terminal.
+# launch-claude-task — what a task-mode run executes instead: headless `claude -p`.
 COPY runtime.json /etc/coding-runtime/runtime.json
 COPY emit.mjs /opt/adapter/emit.mjs
 COPY --chmod=755 launch-claude.sh /usr/local/bin/launch-claude
+COPY --chmod=755 launch-claude-task.sh /usr/local/bin/launch-claude-task
 
 # The operator pins the agent container to uid 1000 with no override, and the
 # base already has a matching passwd entry. Do not create a user here.

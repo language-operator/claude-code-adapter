@@ -56,6 +56,13 @@ jobs:
           CONFORMANCE_SKIP: a keystroke reaches the program under tmux
         run: ./conformance.sh claude-code-adapter:test adapter
 
+      # The suite checks task mode with manifests of its own; this runs the
+      # image's real task command (launch-claude-task, then `claude -p`) against
+      # a mock of the Messages API, under the same posture. Its plugin check
+      # clones language-operator/skills, so it needs GitHub egress.
+      - name: Run task-mode test
+        run: test/task-mode.sh claude-code-adapter:test
+
   chart-lint:
     runs-on: ubuntu-latest
     steps:

@@ -11,9 +11,10 @@ Helm chart that registers the `claude-code` `LanguageAgentRuntime`.
 
 - **Image** (`ghcr.io/language-operator/claude-code-adapter`) — the
   [`coding-runtime`](https://github.com/language-operator/coding-runtime) base
-  plus the Claude Code CLI and three files that describe it to the base:
+  plus the Claude Code CLI and the files that describe it to the base:
   `runtime.json` (the manifest), `emit.mjs` (operator config → Claude Code's
-  native settings) and `launch-claude.sh` (what tmux runs). The base owns the OS
+  native settings), `launch-claude.sh` (what tmux runs) and
+  `launch-claude-task.sh` (what a task-mode run executes). The base owns the OS
   layer — the GitHub and GitLab CLIs, a Go toolchain, Helm, and common Unix tools
   — along with the web terminal, `tini` as PID 1, and the
   `/etc/agent/config.yaml` ETL.
@@ -42,6 +43,36 @@ spec:
 ```
 
 Claude Code authentication is interactive: open the agent terminal and run `/login`.
+
+## Task mode
+
+With `spec.execution.mode: task`, the agent runs once and exits instead of
+serving a terminal. The base runs `launch-claude-task`, which feeds
+`spec.instructions` to headless `claude -p`. Claude Code's exit code becomes the
+run's phase: `0` is `Succeeded`, anything else is `Failed`. The web server
+stays up for the run so the pod's probes pass, and nothing is served to a browser.
+
+- **Authentication has to work unattended.** Nobody is there to run `/login`, so
+  give the agent `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`, through
+  `spec.credentials` or `spec.deployment.env`). A `/login` persisted on the
+  workspace volume by an earlier interactive session also works. With neither,
+  the run fails with `Not logged in`.
+- **No permission prompts.** The run uses `--dangerously-skip-permissions`:
+  an unanswered prompt would hang until `activeDeadlineSeconds`. That is the
+  same boundary the terminal already has. The pod is what contains the agent,
+  so the Security notes below apply in full.
+- **No instructions, no run.** An empty `spec.instructions` fails the run before
+  Claude Code starts, rather than starting an agent with nothing to do.
+- **Output.** `--output-format stream-json --verbose` writes one JSON event per
+  line to the pod log, which is all a task run leaves behind.
+- **The langop plugin.** When the working directory's committed
+  `.claude/settings.json` enables `langop@language-operator`, the launcher
+  installs it first, at the marketplace `ref` that file pins, so
+  `/langop:iterate --auto` is available to the run. It does this because
+  non-interactive Claude Code loads only plugins that are explicitly installed.
+  The install lands under `CLAUDE_CONFIG_DIR` on the workspace volume. It re-runs
+  on every start, which is how a bumped `ref` is picked up. If any step fails,
+  the run fails.
 
 ## Security
 
@@ -80,7 +111,7 @@ OIDC proxy (`auth.enabled` in the chart). Two things follow from that:
 
 ```bash
 make build      # docker build -t ghcr.io/language-operator/claude-code-adapter:latest .
-make test       # build, then run the upstream conformance suite against the image
+make test       # build, then run the upstream conformance suite and test/task-mode.sh
 make dev        # build, import into k3s, and install the chart with pullPolicy=Never
 make publish    # build and push the image to ghcr.io
 
@@ -103,4 +134,5 @@ helm install claude-code chart --namespace language-operator --set image.pullPol
 - `release-chart.yaml` — packages `chart/` and pushes it to `oci://ghcr.io/language-operator/charts`, **on `v*` tags only**: a published chart version is immutable in practice, so publishing is a release action rather than a merge action.
 - `test.yaml` — builds the image, runs the `coding-runtime` conformance suite
   against it (extracted from the image under test, so there is no suite version
-  to keep in step), and lints/templates the chart on every PR.
+  to keep in step), runs `test/task-mode.sh` (the real task command against a
+  mock of the Messages API), and lints/templates the chart on every PR.

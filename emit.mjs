@@ -132,6 +132,12 @@ export function emit(config, { env = {}, renderHeaders = null } = {}) {
   return [
     { path: `${configDir}/settings.json`, values: settings, owns: settingsOwns },
     { path: `${configDir}/.claude.json`, values, owns: CLAUDE_JSON_OWNS },
+    // The prompt for a task-mode run, which launch-claude-task feeds to
+    // `claude -p` on stdin. Taken from the normalized config rather than
+    // AGENT_INSTRUCTIONS so the config file wins, as it does everywhere else.
+    // Written on every seed, empty when there are no instructions, so a task the
+    // operator has since withdrawn cannot linger here and be run again.
+    { path: `${configDir}/task.md`, contents: config.instructions ? `${config.instructions}\n` : '' },
   ];
 }
 
