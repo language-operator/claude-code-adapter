@@ -148,7 +148,9 @@ make test        # builds the image and runs the conformance suite; needs Docker
 
 Docker is usually unavailable in an agent pod. If it is, say so plainly rather than implying the suite ran — CI runs it on the PR, and the PR is where the evidence belongs.
 
-**8. Commit and open a PR.** One commit per dependency group, so a bad bump reverts on its own. Never push to `main`; never tag — releasing is `/release` and it is a separate decision. Merging is safe: chart publishing is restricted to `v*` tags, so a merge publishes nothing.
+**8. Commit and open a PR.** One commit per dependency group, so a bad bump reverts on its own. Never push to `main` directly; never tag — releasing is `/release` and it is a separate decision.
+
+If nothing moved, there is no PR: `git checkout main && git branch -D chore/update-dependencies`, and go straight to the report.
 
 The PR body is the audit record. For each dependency:
 
@@ -162,4 +164,16 @@ The PR body is the audit record. For each dependency:
 
 End with what you did **not** update and why — a held-back major, a pin with a breaking change, a dependency with no newer release, a CLI version deliberately left behind. An empty "not updated" section should be written as such, not omitted.
 
-**9. Report.** What moved, what did not, and anything needing a human decision. If a bump carries a breaking change this repo has to absorb — the `HOME` relocation in the `0.1.0` migration is the worked example — say so explicitly rather than burying it in the diff.
+**9. Merge it — without asking.** This command runs end to end: it finishes with the update on `main`, not with an open PR waiting for someone. Merging is safe because chart publishing is restricted to `v*` tags, so a merge publishes nothing; CI is the gate.
+
+```bash
+gh pr checks <pr> --watch --fail-fast --interval 20   # wait for build, image-test, chart-lint
+gh pr merge <pr> --rebase --delete-branch
+git checkout main && git pull --ff-only && git branch -D chore/update-dependencies
+```
+
+`main` is not branch-protected, so GitHub auto-merge is unavailable — wait on the checks here instead. Merge with `--rebase`, never `--squash`: squashing collapses the per-group commits and defeats the point of making them.
+
+Merge only on green. If a check fails, do **not** merge and do not loosen a pin or skip a check to get it through: leave the PR open, and report the failure with its run link — that is the one outcome that hands back to a human. Findings that are only reported (a held-back major, a stale doc) are not a reason to hold the merge.
+
+**10. Report.** What moved, what did not, and anything needing a human decision. If a bump carries a breaking change this repo has to absorb — the `HOME` relocation in the `0.1.0` migration is the worked example — say so explicitly rather than burying it in the diff.
