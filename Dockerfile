@@ -27,7 +27,7 @@ ARG BASE=ghcr.io/language-operator/coding-runtime:0.1.7@sha256:1eb526429b7636a8e
 # The cost of a pin is that CLI security fixes no longer arrive by rebuilding —
 # they arrive when this number moves. /update-dependencies bumps it alongside
 # the base, and that is what keeps the pin from going stale.
-ARG CLAUDE_CODE_VERSION=2.1.287
+ARG CLAUDE_CODE_VERSION=2.1.289
 
 FROM ${BASE}
 
